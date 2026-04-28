@@ -61,3 +61,25 @@ func TestGetPodAddr(t *testing.T) {
 		assert.Equal(t, tc.expectedAddr, k8s.GetPodAddr(tc.pod))
 	}
 }
+
+func TestGetServiceAddr(t *testing.T) {
+	tests := []struct {
+		name         string
+		serviceName  string
+		namespace    string
+		expectedAddr string
+	}{
+		{
+			name:         "standard service url",
+			serviceName:  "svc1",
+			namespace:    "ns1",
+			expectedAddr: "svc1,ns1.svc.cluster.local",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expectedAddr, k8s.GetServiceAddr(tc.serviceName, tc.namespace))
+		})
+	}
+}

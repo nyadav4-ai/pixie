@@ -33,3 +33,7 @@ func GetPodAddr(pod v1.Pod) string {
 
 	return fmt.Sprintf("%s.%s.pod.cluster.local", podIP, pod.Namespace)
 }
+
+func GetServiceAddr(serviceName, namespace string) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, namespace)
+}

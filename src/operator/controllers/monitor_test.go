@@ -550,12 +550,10 @@ func TestMonitor_getCloudConnState_SeveralCloudConns(t *testing.T) {
 }
 
 func TestMonitor_NATSPods(t *testing.T) {
-	httpClient := &FakeHTTPClient{
-		responses: map[string]string{
-			"http://127-0-0-1.pl.pod.cluster.local:8222": "",
-			"http://127-0-0-3.pl.pod.cluster.local:8222": "NATS Failed",
-		},
-	}
+	// The NATS healthcheck now targets the headless `pl-nats-mgmt` service
+	// rather than each pod's `*.pod.cluster.local` DNS. The mock URL must
+	// match `k8s.GetServiceAddr("pl-nats-mgmt", "pl")` plus the monitor port.
+	const natsMgmtURL = "http://pl-nats-mgmt.pl.svc.cluster.local:8222"
 
 	tests := []struct {
 		name                string
@@ -568,6 +566,10 @@ func TestMonitor_NATSPods(t *testing.T) {
 		natsPodNameLabel string
 		// The name of the nats pod.
 		natsPodName string
+		// Body returned by the mocked NATS monitoring endpoint. An empty
+		// string maps to a 200 response in FakeHTTPClient; a non-empty
+		// string maps to 503.
+		natsMonitorResponse string
 	}{
 		{
 			name:                "OK",
@@ -577,6 +579,7 @@ func TestMonitor_NATSPods(t *testing.T) {
 			expectedVizierPhase: v1alpha1.VizierPhaseHealthy,
 			natsPodNameLabel:    natsLabel,
 			natsPodName:         natsPodName,
+			natsMonitorResponse: "",
 		},
 		{
 			name:                "pending",
@@ -601,6 +604,7 @@ func TestMonitor_NATSPods(t *testing.T) {
 			expectedVizierPhase: v1alpha1.VizierPhaseUnhealthy,
 			natsPodNameLabel:    natsLabel,
 			natsPodName:         natsPodName,
+			natsMonitorResponse: "NATS Failed",
 		},
 		{
 			name:                "missing if nats pod is not named and label is natsLabel",
@@ -620,6 +624,12 @@ func TestMonitor_NATSPods(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			httpClient := &FakeHTTPClient{
+				responses: map[string]string{
+					natsMgmtURL: test.natsMonitorResponse,
+				},
+			}
+
 			pods := &concurrentPodMap{unsafeMap: make(map[string]map[string]*podWrapper)}
 			if !test.podMissing {
 				pods.write(

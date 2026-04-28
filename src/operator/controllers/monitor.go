@@ -65,6 +65,10 @@ const (
 	natsLabel = "pl-nats"
 	// The name of the nats pod.
 	natsPodName = "pl-nats-0"
+	// The headless service that exposes the NATS monitoring port (8222) for
+	// every NATS pod. Using the service DNS avoids depending on
+	// `*.pod.cluster.local` resolution, which is not enabled in some clusters.
+	natsMgmtServiceName = "pl-nats-mgmt"
 	// How often we should ping the vizier pods for status updates.
 	statuszCheckInterval = 20 * time.Second
 	// The threshold of number of crashing PEM pods before we declare a cluster degraded.
@@ -328,7 +332,7 @@ func getNATSState(client HTTPClient, pods *concurrentPodMap) *vizierState {
 
 	u := url.URL{
 		Scheme: "http",
-		Host:   net.JoinHostPort(k8s.GetPodAddr(*natsPod.pod), "8222"),
+		Host:   net.JoinHostPort(k8s.GetServiceAddr(natsMgmtServiceName, natsPod.pod.Namespace), "8222"),
 	}
 
 	resp, err := client.Get(u.String())
