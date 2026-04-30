@@ -27,10 +27,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -110,6 +112,15 @@ func (s *scraperImpl) getEndpointsToScrape() ([]endpoint, error) {
 	if err != nil {
 		return []endpoint{}, err
 	}
+
+	// We resolve the Service that fronts each annotated pod and use its DNS
+	// name in the scrape URL. This avoids depending on `*.pod.cluster.local`
+	// resolution, which is not enabled in some clusters.
+	services, err := s.k8sClientset.CoreV1().Services(s.namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return []endpoint{}, err
+	}
+
 	endpoints := make([]endpoint, 0)
 	for _, p := range pods.Items {
 		if p.ObjectMeta.Annotations[scrapeAnnotationName] != "true" {
@@ -118,13 +129,18 @@ func (s *scraperImpl) getEndpointsToScrape() ([]endpoint, error) {
 		podName := p.ObjectMeta.Name
 		port, ok := p.ObjectMeta.Annotations[portAnnotationName]
 		if !ok {
-			log.WithField("pod name", podName).Warnf("Pod with %s annotation but no %s annotation which is required for metrics scraping", scrapeAnnotationName, portAnnotationName)
+			log.WithField("pod_name", podName).Warnf("Pod with %s annotation but no %s annotation which is required for metrics scraping", scrapeAnnotationName, portAnnotationName)
 			continue
 		}
 
-		// Use k8s pod DNS format instead of just the pod IP, so that the cert is valid.
-		host := k8s.GetPodAddr(p)
+		svc := findServiceForPod(services.Items, p, port)
+		if svc == nil {
+			log.WithField("pod_name", podName).WithField("port", port).
+				Warn("No matching Service found for annotated pod; skipping metrics scrape")
+			continue
+		}
 
+		host := k8s.GetServiceAddr(svc.ObjectMeta.Name, s.namespace)
 		u := url.URL{
 			Scheme: "https",
 			Host:   net.JoinHostPort(host, port),
@@ -136,6 +152,54 @@ func (s *scraperImpl) getEndpointsToScrape() ([]endpoint, error) {
 		})
 	}
 	return endpoints, nil
+}
+
+// findServiceForPod returns the Service whose selector matches the pod's
+// labels and whose port set includes metricsPort. Returns nil if no Service
+// fronts the pod on that port.
+func findServiceForPod(services []v1.Service, pod v1.Pod, metricsPort string) *v1.Service {
+	port, err := strconv.Atoi(metricsPort)
+	if err != nil {
+		return nil
+	}
+	for i := range services {
+		svc := &services[i]
+		if !selectorMatchesLabels(svc.Spec.Selector, pod.Labels) {
+			continue
+		}
+		if !servicePortIncludes(svc, int32(port)) {
+			continue
+		}
+		return svc
+	}
+	return nil
+}
+
+// selectorMatchesLabels reports whether every key/value in selector is present
+// in labels. A service with an empty selector cannot be associated with a pod
+// by labels and is skipped.
+func selectorMatchesLabels(selector, labels map[string]string) bool {
+	if len(selector) == 0 {
+		return false
+	}
+	for k, v := range selector {
+		if labels[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// servicePortIncludes reports whether the service exposes the given numeric
+// port either directly or as a numeric targetPort. Named (string) targetPorts
+// are ignored: IntValue returns 0 for them, which never matches a real port.
+func servicePortIncludes(svc *v1.Service, port int32) bool {
+	for _, p := range svc.Spec.Ports {
+		if p.Port == port || int32(p.TargetPort.IntValue()) == port {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *scraperImpl) scrapeMetrics() {
