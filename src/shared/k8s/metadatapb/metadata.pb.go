@@ -1993,6 +1993,7 @@ type PodUpdate struct {
 	Reason           string            `protobuf:"bytes,15,opt,name=reason,proto3" json:"reason,omitempty"`
 	Labels           string            `protobuf:"bytes,17,opt,name=labels,proto3" json:"labels,omitempty"`
 	OwnerReferences  []*OwnerReference `protobuf:"bytes,18,rep,name=owner_references,json=ownerReferences,proto3" json:"owner_references,omitempty"`
+	Annotations      string            `protobuf:"bytes,19,opt,name=annotations,proto3" json:"annotations,omitempty"`
 }
 
 func (m *PodUpdate) Reset()      { *m = PodUpdate{} }
@@ -2151,6 +2152,13 @@ func (m *PodUpdate) GetOwnerReferences() []*OwnerReference {
 		return m.OwnerReferences
 	}
 	return nil
+}
+
+func (m *PodUpdate) GetAnnotations() string {
+	if m != nil {
+		return m.Annotations
+	}
+	return ""
 }
 
 type ContainerUpdate struct {
@@ -5842,6 +5850,9 @@ func (this *PodUpdate) Equal(that interface{}) bool {
 			return false
 		}
 	}
+	if this.Annotations != that1.Annotations {
+		return false
+	}
 	return true
 }
 func (this *ContainerUpdate) Equal(that interface{}) bool {
@@ -7528,7 +7539,7 @@ func (this *PodUpdate) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 22)
+	s := make([]string, 0, 23)
 	s = append(s, "&metadatapb.PodUpdate{")
 	s = append(s, "UID: "+fmt.Sprintf("%#v", this.UID)+",\n")
 	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
@@ -7552,6 +7563,7 @@ func (this *PodUpdate) GoString() string {
 	if this.OwnerReferences != nil {
 		s = append(s, "OwnerReferences: "+fmt.Sprintf("%#v", this.OwnerReferences)+",\n")
 	}
+	s = append(s, "Annotations: "+fmt.Sprintf("%#v", this.Annotations)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -9454,6 +9466,15 @@ func (m *PodUpdate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.Annotations) > 0 {
+		i -= len(m.Annotations)
+		copy(dAtA[i:], m.Annotations)
+		i = encodeVarintMetadata(dAtA, i, uint64(len(m.Annotations)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x9a
+	}
 	if len(m.OwnerReferences) > 0 {
 		for iNdEx := len(m.OwnerReferences) - 1; iNdEx >= 0; iNdEx-- {
 			{
@@ -12156,6 +12177,10 @@ func (m *PodUpdate) Size() (n int) {
 			n += 2 + l + sovMetadata(uint64(l))
 		}
 	}
+	l = len(m.Annotations)
+	if l > 0 {
+		n += 2 + l + sovMetadata(uint64(l))
+	}
 	return n
 }
 
@@ -13472,6 +13497,7 @@ func (this *PodUpdate) String() string {
 		`Conditions:` + repeatedStringForConditions + `,`,
 		`Labels:` + fmt.Sprintf("%v", this.Labels) + `,`,
 		`OwnerReferences:` + repeatedStringForOwnerReferences + `,`,
+		`Annotations:` + fmt.Sprintf("%v", this.Annotations) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -18699,6 +18725,38 @@ func (m *PodUpdate) Unmarshal(dAtA []byte) error {
 			if err := m.OwnerReferences[len(m.OwnerReferences)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 19:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Annotations", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowMetadata
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthMetadata
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthMetadata
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Annotations = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
